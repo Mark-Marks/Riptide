@@ -134,7 +134,7 @@ local SignalCache: { [string]: Signal.Signal<...any> } = {}
 --[=[
     Creates a new cached signal.
 
-    Cached signals utilize `red-blox/signal` under the hood. The only difference is that they're cached - each Signal has a name, and you can get each Signal from anywhere in your codebase.
+    Cached signals utilize Signal under the hood. All cached signals are put into a cache within Riptide, which can be accessed from anywhere within your codebase.
 
     @within Riptide
     @param Name string
@@ -162,26 +162,34 @@ end
 --[=[
     Logger object, based around events.
 
-    It only logs Fatal events to the developer console, although you can easily set up functions to log any event type you want utilizing `Logger:OnEvent()`:
+    Events consist of an unix timestamp, a level and an attached message.
     ```lua
-    local Logger = Riptide.Logger.new()
+    type Event = {
+        Time: number,
+        Type: "Info" | "Debug" | "Warn" | "Error" | "Fatal",
+        Message: string
+    }
+    ```
+    The `Error` level doesn't stop code execution - `Fatal` on the other hand, halts execution and throws an error to the developer console.
+
+    Loggers expose an API which creates & logs events of every type. Loggers can also be used for asserting - fatally, and non-fatally. Fatal assertions halt code execution and act as type refinements.
+    ```lua
+    Logger:FatalAssert(not Ignited, "Riptide is already ignited.") -- Halts execution & works as a type refinement
+    Logger:Assert(Cookies, "Grandma didn't bake cookies today 😟") -- Logs an `Error` event, but continues on with execution
+    ```
+    Loggers by default don't log any events to the developer console, although you can bypass this by hooking your logger - which will be exlpained next.
+
+    Loggers can be hooked. Hooking allows you to run code for every event of a certain type, or for all events.
+
+    As an example, let's make a logger log `Debug` messages to the developer console:
+    ```lua
     Logger:OnEvent("Debug", function(Event)
-        print(`[🟡][{🕒Event.Time}]: {Event.Message}`)
+        print(`[🟡][🕒{Event.Time}]: {Event.Message}`)
     end)
     ```
+    Running `Logger:Debug("This is a debug")` should print `[🟡][🕒INSERT_TIME_HERE]: This is a debug to the console`.
 
-    Logger contains 5 event types: `Info`, `Debug`, `Warn`, `Error`, `Fatal`.
-
-    `Fatal` uses an `error()` under the hood - it halts execution.
-
-
-    Events consist of the unix timestamp they happened at, their type and the message assigned to them.
-
-    Logger can also be used for soft & fatal assertions -- soft assertions producing `Error` events, and fatal assertions producing `Fatal` events & halting execution.
-    ```lua
-    Logger:FatalAssert(not Ignited, "Riptide is already ignited.") -- If `Ignited` is true, produces a `Fatal` event and halts execution. Works as a type refinement.
-    Logger:Assert(Cookies, "Grandma didn't bake cookies today 😟") -- If `Cookies` is false, produces an `Error` event, but continues execution.
-    ```
+    Another example of hooking would be to make a log book, which allows you to view all events & organize them by time, type and their message. You could also utilize hooking to send all `Fatal` events to some kind of central database, or to alert developers of them.
 
     @class Logger
 ]=]
@@ -189,7 +197,7 @@ local Logger = {} :: LoggerImpl
 Logger.__index = Logger
 
 --[=[
-    Creates a new Logger.
+    Constructs a logger.
 
     @return Logger
 ]=]
@@ -263,7 +271,7 @@ function Logger.Error(self: Logger, Message: string): Event
 end
 
 --[=[
-    Logs at the `Fatal [❌]` level.
+    Logs at the `Fatal [❌]` level and spits out an error to the developer console, halting code execution.
 
     @param Message string
     @return Event
@@ -279,7 +287,7 @@ function Logger.Fatal(self: Logger, Message: string): Event
 end
 
 --[=[
-    Asserts at the `Error [🔴]` level.
+    Performs a soft assertion at the `Error [🔴]` level.
 
     @param Condition boolean
     @param Message string
@@ -297,7 +305,7 @@ function Logger.Assert(self: Logger, Condition: boolean, Message: string): Event
 end
 
 --[=[
-    Asserts at the `Fatal [❌]` level.
+    Performs a fatal assertion at the `Fatal [❌]` level, halting execution and erroring to the developer console if the condition is false.
 
     @param Condition boolean
     @param Message string
@@ -316,9 +324,9 @@ function Logger.FatalAssert(self: Logger, Condition: boolean, Message: string): 
 end
 
 --[=[
-    Called every time an event happens, and it's of your given type.
+    Called every time an event of the specified level happens.
 
-    As an example, this logs every debug statement:
+    As an example, this logs every debug event to the developer console:
     ```lua
     Logger:OnEvent("Debug", function(Event)
         print(`[🟡][{🕒Event.Time}]: {Event.Message}`)
@@ -1084,7 +1092,7 @@ Riptide.Event = Event
     @param ValidateReturn (...unknown) -> U...
     @return Function
 ]=]
-function Riptide.MakeFunction<T..., U...>(Name: string, ValidateArgs: (...unknown) -> T..., ValidateReturn: (...unknown) -> U...): Function<T..., U...>
+function Riptide.Function<T..., U...>(Name: string, ValidateArgs: (...unknown) -> T..., ValidateReturn: (...unknown) -> U...): Function<T..., U...>
     return Function.new(Name, ValidateArgs, ValidateReturn)
 end
 
@@ -1146,7 +1154,7 @@ end
 
     @within Riptide
     @param Verbose boolean? -- Should it log every event to the console?
-    @return Future<number> -- Time it took to load
+    @return Future<number> -- Time it took to load wrapped in a Future
 ]=]
 function Riptide.Ignite(Verbose: boolean?): Future.Future<number>
     DefaultLogger:FatalAssert(not Ignited, "Riptide is already ignited.")

@@ -1,1 +1,3 @@
 gitSourceBranch = "main"
+
+classOrder = ["Riptide", "Logger", "Event", "ClientEvent", "ServerEvent", "Function"]
