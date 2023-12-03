@@ -15,3 +15,11 @@ Riptide is fully strictly typed, giving You full intellisense and improving the 
 ### 📦 Bloatless
 
 Riptide is made to have as little bloat as possible, exposing and using only what's necessary.
+
+## Installation
+
+Add Riptide to your `wally.toml`:
+```toml
+[dependencies]
+Riptide = "mark-marks/riptide@1.0.0"
+```
