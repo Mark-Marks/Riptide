@@ -1,0 +1,14 @@
+{
+  "name": "riptide",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+        "Packages": {
+            "$path": "Packages",
+            "Riptide": {
+                "$path": "src"
+            }
+        }
+    }
+  }
+}

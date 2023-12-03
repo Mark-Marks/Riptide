@@ -1,0 +1,14 @@
+# Project place file
+/Turbine.rbxlx
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+#vscode workspace config
+.vscode
+
+# wally & rojo
+wally.lock
+sourcemap.json
+Packages
