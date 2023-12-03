@@ -173,7 +173,7 @@ end
     Logger contains 5 event types: `Info`, `Debug`, `Warn`, `Error`, `Fatal`.
 
     `Fatal` uses an `error()` under the hood - it halts execution.
-    
+
 
     Events consist of the unix timestamp they happened at, their type and the message assigned to them.
 
@@ -321,7 +321,7 @@ end
     As an example, this logs every debug statement:
     ```lua
     Logger:OnEvent("Debug", function(Event)
-        print(`[🟡][{Event.Time}]: {Event.Message}`)
+        print(`[🟡][{🕒Event.Time}]: {Event.Message}`)
     end)
     ```
 
