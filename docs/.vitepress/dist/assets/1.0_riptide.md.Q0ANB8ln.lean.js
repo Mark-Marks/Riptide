@@ -1,0 +1,1 @@
+import{_ as s,o as i,c as a,R as n}from"./chunks/framework.b72w6-dR.js";const y=JSON.parse('{"title":"Riptide","description":"","frontmatter":{},"headers":[],"relativePath":"1.0/riptide.md","filePath":"1.0/riptide.md"}'),t={name:"1.0/riptide.md"},h=n("",47),l=[h];function e(k,p,r,E,d,g){return i(),a("div",null,l)}const c=s(t,[["render",e]]);export{y as __pageData,c as default};
