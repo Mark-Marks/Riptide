@@ -3,12 +3,20 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-        "Packages": {
-            "$path": "Packages",
-            "Riptide": {
-                "$path": "src"
-            }
-        }
+      "Packages": {
+          "$path": "Packages",
+          "Riptide": {
+              "$path": "src"
+          }
+      }
+    },
+    "ServerScriptService": {
+      "$path": "Example/server"
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "Example/client"
+      }
     }
   }
 }

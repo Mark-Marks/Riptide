@@ -9,6 +9,41 @@ local Ratelimiter = require(ReplicatedStorage.Packages.Ratelimit)
 local Guard = require(ReplicatedStorage.Packages.Guard)
 local Spawn = require(ReplicatedStorage.Packages.Spawn)
 
+
+--[=[
+    A minimal framework, designed with speed and ease of development in mind.
+
+    Example usage for loading singletons:
+    ```lua
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Riptide = require(ReplicatedStorage.Packages.Riptide)
+
+    Riptide.AddSingletons(script)
+
+    Riptide.Ignite():After(function(Took)
+        Riptide.DefaultLogger:Info(`Took {Took}s to load.`)
+    end)
+    ```
+
+    @class Riptide
+]=]
+local Riptide = {}
+
+--- Reference to `red-blox/guard`
+--- @prop Guard Guard
+--- @within Riptide
+Riptide.Guard = Guard
+
+--- Reference to `red-blox/future`
+--- @prop Future Future
+--- @within Riptide
+Riptide.Future = Future
+
+--- Reference to `red-blox/signal`
+--- @prop AnonymousSignal Signal
+--- @within Riptide
+Riptide.AnonymousSignal = Signal
+
 ---------------------------------------------------
 -- TYPES
 ---------------------------------------------------
@@ -17,15 +52,17 @@ export type ClientEvent<T...> = {
     Id: string,
     Reliable: boolean,
     Validate: (...unknown) -> T...,
+    Received: Signal.Signal<T...>,
 
     Fire: (self: ClientEvent<T...>, T...) -> (),
-    On: (self: ClientEvent<T...>, Callback: (T...) -> ()) -> ()
+    On: (self: ClientEvent<T...>, Callback: (T...) -> ()) -> () -> ()
 }
 
 export type ServerEvent<T...> = {
     Id: string,
     Reliable: boolean,
     Validate: (...unknown) -> T...,
+    Received: Signal.Signal<(Player, T...)>,
 
     Fire: (self: ServerEvent<T...>, Player: Player, T...) -> (),
     FireAll: (self: ServerEvent<T...>, T...) -> (),
@@ -33,7 +70,7 @@ export type ServerEvent<T...> = {
     FireList: (self: ServerEvent<T...>, List: { Player }, T...) -> (),
     FireWithFilter: (self: ServerEvent<T...>, Filter: (Player) -> boolean, T...) -> (),
 
-    On: (self: ServerEvent<T...>, Callback: (Player, T...) -> ()) -> (),
+    On: (self: ServerEvent<T...>, Callback: (Player, T...) -> ()) -> () -> (),
 
     Ratelimit: (self: ServerEvent<T...>, Limit: number, Interval: number) -> ()
 }
@@ -42,7 +79,7 @@ export type Function<T..., U...> = {
     Id: string,
     Validate: (...unknown) -> T...,
 
-    SetCallback: (self: Function<T..., U...>, Callback: (Player, T...) -> U...) -> (),
+    SetCallback: (self: Function<T..., U...>, Callback: (Player, T...) -> U...) -> () -> (),
     Call: (self: Function<T..., U...>, T...) -> Future.Future<(boolean, U...)>,
     RateLimit: (self: Function<T..., U...>, Limit: number, Interval: number) -> ()
 }
@@ -87,31 +124,11 @@ export type Logger = typeof(setmetatable({} :: {
     _Happened: Signal.Signal<Event>
 }, {} :: LoggerImpl))
 
-export type Character = {
-    ["Body Colors"]: BodyColors,
-    HumanoidRootPart: Part,
-    Humanoid: Humanoid & {
-        HumanoidDescription: HumanoidDescription,
-        Animator: Animator
-    },
-    Head: Part & {
-        face: Decal,
-        Mesh: SpecialMesh
-    },
-    ["Left Arm"]: Part,
-    ["Left Leg"]: Part,
-    ["Right Arm"]: Part,
-    ["Right Leg"]: Part,
-    ["Torso"]: Part & {
-        roblox: Decal
-    }
-} & Model
-
 ---------------------------------------------------
 -- UTIL
 ---------------------------------------------------
 
---- Cached Signal
+-- Cached Signal
 
 local SignalCache: { [string]: Signal.Signal<...any> } = {}
 
@@ -119,10 +136,11 @@ local SignalCache: { [string]: Signal.Signal<...any> } = {}
     Creates a new cached signal.
     Cached signals utilize `red-blox/signal` under the hood. Their only difference is that they're cached - therefore you can give Signals names and get them from other places.
 
+    @within Riptide
     @param Name string
     @return Signal<Args>
 ]=]
-function CachedSignal<T...>(Name: string): Signal.Signal<T...>
+function Riptide.CachedSignal<T...>(Name: string): Signal.Signal<T...>
     if SignalCache[Name] then return SignalCache[Name] end
 
     local NewSignal: Signal.Signal<T...> = Signal()
@@ -131,7 +149,7 @@ function CachedSignal<T...>(Name: string): Signal.Signal<T...>
     return NewSignal
 end
 
---- Logger
+-- Logger
 
 local function ConstructEvent(Type: EventType, Message: string): Event
     return {
@@ -141,12 +159,35 @@ local function ConstructEvent(Type: EventType, Message: string): Event
     }
 end
 
+--[=[
+    Logger object, based around events.
+
+    Only Fatal level events are logged to the developer console, though you can set up functions to log any event type you want utiling `Logger:OnEvent()`:
+    ```lua
+    local Logger = Riptide.Logger.new()
+    Logger:OnEvent("Debug", function(Event)
+        print(`[🟡][{Event.Time}]: {Event.Message}`)
+    end)
+    ```
+
+    Logger contains 5 event types: `Info`, `Debug`, `Warn`, `Error`, `Fatal`.
+    `Fatal` works the same as `error()` -- it halts execution.
+
+    Events consist of the unix timestamp they happened at, their type and the message assigned to them.
+
+    Logger can also be used for soft & fatal assertions -- soft assertions producing `Error` events, and fatal assertions producing `Fatal` events & halting execution.
+    ```lua
+    Logger:FatalAssert(not Ignited, "Riptide is already ignited.") -- If `Ignited` is true, produces a `Fatal` event and halts execution. Works as a type refinement.
+    Logger:Assert(Cookies, "Grandma didn't bake cookies today 😟") -- If `Cookies` is false, produces an `Error` event, but continues execution.
+    ```
+
+    @class Logger
+]=]
 local Logger = {} :: LoggerImpl
 Logger.__index = Logger
 
 --[=[
     Creates a new Logger.
-    Loggers log events. Only fatals are logged to the developer console, though you can set up functions to log any event type you want utilizing `Logger:OnEvent()`.
 
     @return Logger
 ]=]
@@ -160,7 +201,7 @@ function Logger.new(): Logger
 end
 
 --[=[
-    Logs at the Info [🔵] level.
+    Logs at the `Info [🔵]` level.
 
     @param Message string
     @return Event
@@ -175,7 +216,7 @@ function Logger.Info(self: Logger, Message: string): Event
 end
 
 --[=[
-    Logs at the Debug [🟡] level.
+    Logs at the `Debug [🟡]` level.
 
     @param Message string
     @return Event
@@ -190,7 +231,7 @@ function Logger.Debug(self: Logger, Message: string): Event
 end
 
 --[=[
-    Logs at the Warn [🟠] level.
+    Logs at the `Warn [🟠]` level.
 
     @param Message string
     @return Event
@@ -205,7 +246,7 @@ function Logger.Warn(self: Logger, Message: string): Event
 end
 
 --[=[
-    Logs at the Error [🔴] level.
+    Logs at the `Error [🔴]` level.
 
     @param Message string
     @return Event
@@ -220,7 +261,7 @@ function Logger.Error(self: Logger, Message: string): Event
 end
 
 --[=[
-    Logs at the Fatal [❌] level.
+    Logs at the `Fatal [❌]` level.
 
     @param Message string
     @return Event
@@ -236,7 +277,7 @@ function Logger.Fatal(self: Logger, Message: string): Event
 end
 
 --[=[
-    Asserts at the Error [🔴] level.
+    Asserts at the `Error [🔴]` level.
 
     @param Condition boolean
     @param Message string
@@ -254,7 +295,7 @@ function Logger.Assert(self: Logger, Condition: boolean, Message: string): Event
 end
 
 --[=[
-    Asserts at the Fatal [❌] level.
+    Asserts at the `Fatal [❌]` level.
 
     @param Condition boolean
     @param Message string
@@ -302,36 +343,33 @@ function Logger.OnAnyEvent(self: Logger, Callback: (Event: Event) -> ()): () -> 
     return self._Happened:Connect(Callback)
 end
 
+--- Reference to the `Logger` class
+--- @prop Logger Logger
+--- @within Riptide
+Riptide.Logger = Logger
 
-local GLogger = Logger.new()
-GLogger:OnEvent("Debug", function(Event)
-    print(`[🟡][{Event.Time}]: {Event.Message}`)
+local DefaultLogger = Logger.new()
+DefaultLogger:OnEvent("Debug", function(Event)
+    print(`[🟡][🕒{Event.Time}]: {Event.Message}`)
+end)
+DefaultLogger:OnEvent("Info", function(Event)
+    print(`[🔵][🕒{Event.Time}]: {Event.Message}`)
 end)
 
---- Get Character
-
-local function GetCharacter(Player: Player?): Future.Future<Character>
-    return Future.new(function()
-        if not Player then
-            GLogger:FatalAssert(RunService:IsClient(), "GetCharacter() can only be called without arguemnts on the client.")
-
-            local LocalPlayer = Players.LocalPlayer
-            return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        end
-
-        return (Player.Character or Player.CharacterAdded:Wait()) :: Character
-    end)
-end
+--- Reference to Riptide's default logger, which logs all `Debug` and `Info` events
+--- @prop DefaultLogger Logger
+--- @within Riptide
+Riptide.DefaultLogger = DefaultLogger
 
 ---------------------------------------------------
 -- NETWORKING
 ---------------------------------------------------
 
----- Backend
+-- Backend
 
 local InternalClientNet = {}
 do
-    local ListenerMap: { [string]: Signal.Signal<{ any }> } = {}
+    local ListenerMap: { [string]: ({ any }) -> () } = {}
     local CallMap: { [string]: thread } = {}
     local Outgoing: {
         Reliable: { [string]: { { any } } },
@@ -359,8 +397,8 @@ do
         table.insert(Outgoing.Unreliable[EventId], CallList)
     end
 
-    function InternalClientNet.Listen(EventId: string, Callback: ({ any }) -> ())
-        ListenerMap[EventId]:Connect(Callback)
+    function InternalClientNet.SetListener(EventId: string, Callback: ({ any }) -> ())
+        ListenerMap[EventId] = Callback
     end
 
     function InternalClientNet.CallAsync(EventId: string, CallList: { any }): { any }
@@ -376,7 +414,7 @@ do
 
     function InternalClientNet.Start()
         local ReliableRemote = ReplicatedStorage:WaitForChild("ReliableRedEvent") :: RemoteEvent
-        local UnreliableRemote = ReplicatedStorage:WaitForChild("UnreliableRedEvent") :: RemoteEvent
+        local UnreliableRemote = ReplicatedStorage:WaitForChild("UnreliableRedEvent") :: UnreliableRemoteEvent
 
         ReliableRemote.OnClientEvent:Connect(function(IncomingFireSection, IncomingCallSection)
             if IncomingFireSection then
@@ -385,7 +423,7 @@ do
                     if not Listener then continue end
 
                     for _, Call in CallList do
-                        Listener:Fire(Call)
+                        Listener(Call)
                     end
                 end
             end
@@ -409,7 +447,7 @@ do
                 if not Listener then continue end
 
                 for _, Call in CallList do
-                    Listener:Fire(Call)
+                    Listener(Call)
                 end
             end
         end)
@@ -436,7 +474,7 @@ do
     local FireSectionCheck = Guard.Check(Guard.Map(Guard.String, Guard.List(Guard.Any)))
     local CallSectionCheck = Guard.Check(Guard.Map(Guard.String, Guard.List(Guard.Any)))
 
-    local ListenerMap: { [string]: Signal.Signal<Player, { any }> } = {}
+    local ListenerMap: { [string]: (Player, { any }) -> () } = {}
     local OutgoingMap: {
         [Player]: {
             Reliable: { [string]: { { any } } },
@@ -478,7 +516,7 @@ do
     end
 
     function InternalServerNet.Listen(EventId: string, Callback: (Player, { any }) -> ())
-        ListenerMap[EventId]:Connect(Callback)
+        ListenerMap[EventId] = Callback
     end
 
     function InternalServerNet.SendCallReturn(Player: Player, CallId: string, Args: { any })
@@ -495,18 +533,18 @@ do
 
     function InternalServerNet.Start()
         local ReliableRemote = ReplicatedStorage:WaitForChild("ReliableRedEvent") :: RemoteEvent
-        local UnreliableRemote = ReplicatedStorage:WaitForChild("UnreliableRedEvent") :: RemoteEvent
+        local UnreliableRemote = ReplicatedStorage:WaitForChild("UnreliableRedEvent") :: UnreliableRemoteEvent
 
         ReliableRemote.OnServerEvent:Connect(function(Player, IncomingFireSection, IncomingCallSection)
             local FireSectionValid, FireSection = FireSectionCheck(IncomingFireSection)
 
             if FireSectionValid then
                 for EventId, CallList in FireSection do
-                    local Callback = ListenerMap[EventId]
-                    if not Callback then return end
+                    local Listener = ListenerMap[EventId]
+                    if not Listener then return end
 
                     for _, Call in CallList do
-                        Callback:Fire(Player, Call)
+                        Listener(Player, Call)
                     end
                 end
             end
@@ -515,11 +553,11 @@ do
             if not CallSectionValid then return end
 
             for EventId, CallList in CallSection do
-                local Callback = ListenerMap[EventId]
+                local Listener = ListenerMap[EventId]
 
-                if Callback then
+                if Listener then
                     for _, Call in CallList do
-                        Callback:Fire(Player, Call)
+                        Listener(Player, Call)
                     end
                     continue
                 end
@@ -541,7 +579,7 @@ do
                 if not Callback then continue end
 
                 for _, Call in CallList do
-                    Callback:Fire(Player, Call)
+                    Callback(Player, Call)
                 end
             end
         end)
@@ -631,7 +669,44 @@ do
     end
 end
 
-local InternalFunction = {}
+-- Frontend
+
+--[=[
+    A blazingly fast remote function.
+
+    Server side
+    ```lua
+    local GetMoney = Riptide.Function(
+        "GetMoney",
+        function() end,
+        function(Money)
+            return Riptide.Guard.Number(Money) -- Types the return as a Number
+        end
+    )
+
+    GetMoney:Ratelimit(1, 1) -- Ratelimits the function to 1 call per second
+
+    GetMoney:SetCallback(function(Player)
+        return Data:GetMoney(Player)
+    end)
+    ```
+
+    Client side
+    ```lua
+    local GetMoney = Riptide.Function(
+        "GetMoney",
+        function() end,
+        function(Money)
+            return Riptide.Guard.Number(Money) -- Types the return as a Number
+        end
+    )
+
+    local Money = GetMoney:Call():Await()
+    ```
+
+    @class Function
+]=]
+local Function = {}
 do
     local Ratelimits: { [string]: (Key: Player) -> boolean } = {}
 
@@ -639,14 +714,14 @@ do
         Sets the callback of the remote function.
         ⚠️ Only callable on the server!
 
+        @within Function
         @param Callback (Player, Args) -> Return
     ]=]
     local function SetCallback<T..., U...>(self: Function<T..., U...>, Callback: (Player, T...) -> U...)
-        GLogger:FatalAssert(RunService:IsServer(), "[Riptide] Function.SetCallback: Cannot set callback to function on client.")
-        
+        DefaultLogger:FatalAssert(RunService:IsServer(), "[Riptide] Function.SetCallback: Cannot set callback to function on client.")
+
         InternalServerNet.Listen(self.Id, function(Player, Args)
             local CallId = table.remove(Args, 1)
-
             if typeof(CallId) ~= "string" then return end
 
             Spawn(function(EventId: string, Player: Player, CallId: string, ...: any)
@@ -663,10 +738,11 @@ do
         Calls the remote function.
         ⚠️ Only callable on the client!
 
-        @param Args
+        @within Function
+        @param ... -- Args
     ]=]
     local function Call<T..., U...>(self: Function<T..., U...>, ...: T...)
-        GLogger:FatalAssert(RunService:IsClient(), "[Riptide] Function.Call: Cannot call on the server.")
+        DefaultLogger:FatalAssert(RunService:IsClient(), "[Riptide] Function.Call: Cannot call on the server.")
 
         return Future.new(function(...: T...)
             local CallId = Identifier.Unique()
@@ -678,17 +754,18 @@ do
     --[=[
         Ratelimits the function.
 
+        @within Function
         @param Limit number
         @param Interval number
     ]=]
     local function Ratelimit<T..., U...>(self: Function<T..., U...>, Limit: number, Interval: number)
-        GLogger:FatalAssert(RunService:IsServer(), "[Riptide] Function.Ratelimit: Cannot call on the client.")
+        DefaultLogger:FatalAssert(RunService:IsServer(), "[Riptide] Function.Ratelimit: Cannot call on the client.")
 
         Ratelimits[self.Id] = Ratelimiter(Limit, Interval)
     end
 
-    function InternalFunction.new<T..., U...>(Name: string, ValidateArgs: (...unknown) -> T..., ValidateReturn: (...unknown) -> U...): Function<T..., U...>
-        GLogger:FatalAssert(not Identifier.Exists(Name), "[Riptide] Function.new: Cannot use the same name twice.")
+    function Function.new<T..., U...>(Name: string, ValidateArgs: (...unknown) -> T..., ValidateReturn: (...unknown) -> U...): Function<T..., U...>
+        DefaultLogger:FatalAssert(not Identifier.Exists(Name), "[Riptide] Function.new: Cannot use the same name twice.")
 
         return {
             Id = Identifier.Shared(Name):Await(),
@@ -701,14 +778,18 @@ do
     end
 end
 
----- Frontend
+--[=[
+    A client event.
 
+    @class ClientEvent
+]=]
 local ClientEvent = {}
 do
     --[=[
         Fires data to the server.
 
-        @param Args
+        @within ClientEvent
+        @param ... -- Args
     ]=]
     local function Fire<T...>(self: ClientEvent<T...>, ...: T...)
         if self.Reliable then
@@ -722,27 +803,38 @@ do
     --[=[
         Listens to data from the server.
 
+        @within ClientEvent
         @param Callback (Args) -> void
+        @return () -> () -- Used to disconnect
     ]=]
-    local function On<T...>(self: ClientEvent<T...>, Callback: (T...) -> ())
-        InternalClientNet.Listen(self.Id, function(Args)
-            Spawn(Callback, table.unpack(Args))
-        end)
+    local function On<T...>(self: ClientEvent<T...>, Callback: (T...) -> ()): () -> ()
+        return self.Received:Connect(Callback)
     end
 
     function ClientEvent.new<T...>(Id: string, Reliable: boolean, Validate: (...unknown) -> T...): ClientEvent<T...>
-        return {
+        local self = {
             Id = Id,
             Reliable = Reliable,
             Validate = Validate,
+            Received = Signal(),
 
             Fire = Fire,
             On = On
-        } :: any
+        }
+        
+        InternalClientNet.SetListener(self.Id, function(Args)
+            self.Received:Fire(table.unpack(Args))
+        end)
+
+        return self :: any
     end
 end
 
+--[=[
+    A server event.
 
+    @class ServerEvent
+]=]
 local ServerEvent = {}
 do
     local Ratelimits: { [string]: (Key: Player) -> boolean } = {}
@@ -750,8 +842,9 @@ do
     --[=[
         Fires data to the given player.
 
+        @within ServerEvent
         @param Player
-        @param Args
+        @param ... -- Args
     ]=]
     local function Fire<T...>(self: ServerEvent<T...>, Player: Player, ...: T...)
         if self.Reliable then
@@ -765,7 +858,8 @@ do
     --[=[
         Fires data to all players.
 
-        @param Args
+        @within ServerEvent
+        @param ... -- Args
     ]=]
     local function FireAll<T...>(self: ServerEvent<T...>, ...: T...)
         local Args = table.pack(...)
@@ -783,8 +877,9 @@ do
     --[=[
         Fires data to every player except the given one.
 
+        @within ServerEvent
         @param Except Player
-        @param Args
+        @param ... -- Args
     ]=]
     local function FireAllExcept<T...>(self: ServerEvent<T...>, Except: Player, ...: T...)
         local Args = table.pack(...)
@@ -804,8 +899,9 @@ do
     --[=[
         Fires data to a list of players.
 
+        @within ServerEvent
         @param List { Player }
-        @param Args
+        @param ... -- Args
     ]=]
     local function FireList<T...>(self: ServerEvent<T...>, List: { Player }, ...: T...)
         local Args = table.pack(...)
@@ -823,8 +919,9 @@ do
     --[=[
         Fires data to filtered players.
 
+        @within ServerEvent
         @param Filter (Player) -> boolean
-        @param Args
+        @param ... -- Args
     ]=]
     local function FireWithFilter<T...>(self: ServerEvent<T...>, Filter: (Player) -> boolean, ...: T...)
         local Args = table.pack(...)
@@ -845,23 +942,18 @@ do
         Listens to data from the client.
         All data from the client is validated first.
 
+        @within ServerEvent
         @param Callback (Player, Args) -> void
+        @return () -> () -- Used to disconnect
     ]=]
-    local function On<T...>(self: ServerEvent<T...>, Callback: (Player, T...) -> ())
-        InternalServerNet.Listen(self.Id, function(Player, Args)
-            Spawn(function(self: ServerEvent<T...>, EventId: string, Player: Player, ...: any)
-                local Ratelimit = Ratelimits[EventId]
-                if Ratelimit and not Ratelimit(Player) then return end
-                if not self.Validate(...) then return end
-    
-                Callback(Player, ...)
-            end, self, self.Id, Player, table.unpack(Args))
-        end)
+    local function On<T...>(self: ServerEvent<T...>, Callback: (Player, T...) -> ()): () -> ()
+        return self.Received:Connect(Callback)
     end
 
     --[=[
         Ratelimits the event.
 
+        @within ServerEvent
         @param Limit number
         @param Interval number
     ]=]
@@ -874,6 +966,7 @@ do
             Id = Id,
             Reliable = Reliable,
             Validate = Validate,
+            Received = Signal(),
 
             Fire = Fire,
             FireAll = FireAll,
@@ -885,25 +978,52 @@ do
 
             Ratelimit = Ratelimit
         }
+
+        InternalServerNet.Listen(self.Id, function(Player, Args)
+            Spawn(function()
+                local Ratelimit = Ratelimits[self.Id]
+                if Ratelimit and not Ratelimit(Player) then return end
+                if not self.Validate(table.unpack(Args)) then return end
+
+                self.Received:Fire(Player, table.unpack(Args))
+            end)
+        end)
         
         return self :: any
     end
 end
 
+--[=[
+    Blazingly fast & typesafe networking, utilizing Red under the hood.
+
+    ```lua
+    -- Server
+    local ValidateRole = Riptide.Guard.Or(Riptide.Guard.Literal("Murderer"), Riptide.Guard.Literal("Innocent"))
+    local AssignRole = Riptide.Event.Server("AssignRole", true, function(Role)
+        return ValidateRole(Role) -- Automatically types `Team` as `"Murderer" | "Innocent"`
+    end)
+
+    AssignRole:Fire(Murderer, "Murderer")
+    ```
+
+    ```lua
+    -- Client
+    local ValidateRole = Riptide.Guard.Or(Riptide.Guard.Literal("Murderer"), Riptide.Guard.Literal("Innocent"))
+    local AssignRole = Riptide.Event.Client("AssignRole", true, function(Role)
+        return ValidateRole(Role) -- Automatically types `Team` as `"Murderer" | "Innocent"`
+    end)
+
+    AssignRole:On(function(Role) -- `Role` is now `"Murder" | "Innocent"`
+        LocalPlayer.Role.Value = Role
+    end)
+    ```
+
+    @class Event
+]=]
 local Event = {}
 
 --[=[
     Creates an event on the client.
-
-    ```lua
-    local Riptide = require(?)
-
-    local Event = Riptide.Event.Client("Say", true)
-
-    Event:On(function(Message: string)
-        print("The server said hello!")
-    end)
-    ```
 
     @param Name string
     @param Reliable boolean
@@ -911,8 +1031,12 @@ local Event = {}
     @return ClientEvent
 ]=]
 function Event.Client<T...>(Name: string, Reliable: boolean, Validate: (...unknown) -> T...): ClientEvent<T...>
-    GLogger:FatalAssert(RunService:IsClient(), "[Riptide] Event.Client: Can only be accessed from the client.")
-    GLogger:FatalAssert(not Identifier.Exists(Name), "[Riptide] Event.Client: Cannot use the same name twice.")
+    if not Reliable then
+        Name ..= "U"
+    end
+
+    DefaultLogger:FatalAssert(RunService:IsClient(), "[Riptide] Event.Client: Can only be accessed from the client.")
+    DefaultLogger:FatalAssert(not Identifier.Exists(Name), "[Riptide] Event.Client: Cannot use the same name twice.")
 
     local Id = Identifier.Shared(Name):Await()
 
@@ -922,51 +1046,40 @@ end
 --[=[
     Creates an event on the server.
 
-    ```lua
-    local Riptide = require(?)
-
-    local Event = Riptide.Event.Server("Say", true, function(Message)
-        return Riptide.Guard.String(Message)
-    end)
-
-    Event:FireAll("Hello!")
-    ```
-
     @param Name string
     @param Reliable boolean
     @param Validate (...unknown) -> T... -- Sanity checks the data sent from the player & provides typechecking
     @return ServerEvent
 ]=]
 function Event.Server<T...>(Name: string, Reliable: boolean, Validate: (...unknown) -> T...): ServerEvent<T...>
-    GLogger:FatalAssert(RunService:IsServer(), "[Riptide] Event.Server: Can only be accessed from the server.")
-    GLogger:FatalAssert(not Identifier.Exists(Name), "[Riptide] Event.Server: Cannot use the same name twice.")
+    if not Reliable then
+        Name ..= "U"
+    end
+
+    DefaultLogger:FatalAssert(RunService:IsServer(), "[Riptide] Event.Server: Can only be accessed from the server.")
+    DefaultLogger:FatalAssert(not Identifier.Exists(Name), "[Riptide] Event.Server: Cannot use the same name twice.")
 
     local Id = Identifier.Shared(Name):Await()
 
     return ServerEvent.new(Id, Reliable, Validate)
 end
 
+--- Reference to `Event`
+--- @prop Event Event
+--- @within Riptide
+Riptide.Event = Event
+
 --[=[
     Creates a remote function.
 
-    ```lua
-    local Riptide = require(?)
-
-    -- Server
-    local Function = Riptide.Function("RequestNumber",
-        function(Seed)
-            return Riptide.Guard.Number(Seed)
-        end,
-        function(Number)
-            return Riptide.Guard.Number(Number)
-        end
-    )
-
-    Function.
-    ```
+    @within Riptide
+    @param Name string
+    @param ValidateArgs (...unknown) -> T...
+    @param ValidateReturn (...unknown) -> U...
+    @return Function
 ]=]
-local function Function<T..., U...>(Name: string, ValidateArgs: (...unknown) -> T..., ValidateReturn: (...unknown) -> U...): Function<T..., U...>
-    return InternalFunction.new(Name, ValidateArgs, ValidateReturn)
+function Riptide.MakeFunction<T..., U...>(Name: string, ValidateArgs: (...unknown) -> T..., ValidateReturn: (...unknown) -> U...): Function<T..., U...>
+    return Function.new(Name, ValidateArgs, ValidateReturn)
 end
 
 ---------------------------------------------------
@@ -987,59 +1100,79 @@ local Connections: {
     Heartbeat = Signal()
 }
 
-local function AddSingleton(Singleton: ModuleScript)
-    GLogger:FatalAssert(not Ignited, "Riptide is already ignited.")
-    GLogger:FatalAssert(not Modules[Singleton.Name], "Such a singleton already exists.")
+--[=[
+    Registers a singleton.
+
+    @within Riptide
+    @param Singleton ModuleScript
+]=]
+function Riptide.AddSingleton(Singleton: ModuleScript)
+    DefaultLogger:FatalAssert(not Ignited, "Riptide is already ignited.")
+    DefaultLogger:FatalAssert(not Modules[Singleton.Name], "Such a singleton already exists.")
 
     Modules[Singleton.Name] = Singleton
     Count += 1
 end
 
-local function AddSingletons(Path: Folder)
-    GLogger:FatalAssert(not Ignited, "Riptide is already ignited.")
+--[=[
+    Shallowly registers singletons.
+
+    @within Riptide
+    @param Path Instance
+]=]
+function Riptide.AddSingletons(Path: Instance)
+    DefaultLogger:FatalAssert(not Ignited, "Riptide is already ignited.")
 
     for _, Child in Path:GetChildren() do
         if not Child:IsA("ModuleScript") then continue end
 
-        GLogger:FatalAssert(not Modules[Child.Name], "Such a singleton already exists.")
+        DefaultLogger:FatalAssert(not Modules[Child.Name], "Such a singleton already exists.")
 
         Modules[Child.Name] = Child :: ModuleScript
         Count += 1
     end
 end
 
-local function Ignite(Verbose: boolean?): Future.Future<number>
-    GLogger:FatalAssert(not Ignited, "Riptide is already ignited.")
+--[=[
+    Starts Riptide, loading all of the singletons.
+    Returns the time it took to load everything.
+
+    @within Riptide
+    @param Verbose boolean? -- Should it log every event to the console?
+    @return Future<number> -- Time it took to load
+]=]
+function Riptide.Ignite(Verbose: boolean?): Future.Future<number>
+    DefaultLogger:FatalAssert(not Ignited, "Riptide is already ignited.")
 
     return Future.new(function()
         local function Log(Message: string, Verbose: boolean?)
             if not Verbose then return end
-            GLogger:Debug(Message)
+            DefaultLogger:Debug(Message)
         end
 
         local Started = os.clock()
 
-        --- Load singletons
+        -- Load singletons
         for Name, Module in Modules do
             Log(`Loading singleton {Name}`, Verbose)
             Singletons[Name] = require(Module) :: Singleton
         end
 
-        --- Initialize singletons
+        -- Initialize singletons
         for Name, Singleton in Singletons do
             if not Singleton.Init then continue end
             Log(`Initializing singleton {Name}`, Verbose)
             Singleton.Init()
         end
 
-        --- Start singletons
+        -- Start singletons
         for Name, Singleton in Singletons do
             if not Singleton.Start then continue end
             Log(`Starting singleton {Name}`, Verbose)
             Spawn(Singleton.Start)
         end
 
-        --- Connect to Stepped and Heartbeat
+        -- Connect to Stepped and Heartbeat
         for Name, Singleton in Singletons do
             if Singleton.Stepped then
                 Log(`Connecting singleton {Name} to Stepped`, Verbose)
@@ -1059,24 +1192,14 @@ local function Ignite(Verbose: boolean?): Future.Future<number>
             Connections.Heartbeat:Fire(DeltaTime)
         end)
 
-        return Started
+        if RunService:IsServer() then
+            InternalServerNet.Start()
+        else
+            InternalClientNet.Start()
+        end
+
+        return os.clock()-Started
     end)
 end
 
-return {
-    Event = Event,
-    RemoteFunction = Function,
-
-    Logger = Logger,
-
-    Guard = Guard,
-    Future = Future,
-    Signal = CachedSignal,
-    AnonymousSignal = Signal,
-    
-    GetCharacter = GetCharacter,
-
-    AddSingleton = AddSingleton,
-    AddSingletons = AddSingletons,
-    Ignite = Ignite
-}
+return Riptide
