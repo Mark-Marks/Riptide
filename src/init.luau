@@ -314,6 +314,7 @@ end
 
 --[=[
     Called every time an event happens, and it's of your given type.
+
     As an example, this logs every debug statement:
     ```lua
     Logger:OnEvent("Debug", function(Event)
@@ -673,7 +674,7 @@ end
 --[=[
     A blazingly fast remote function.
 
-    Server side
+    Server side example
     ```lua
     local GetMoney = Riptide.Function(
         "GetMoney",
@@ -690,7 +691,7 @@ end
     end)
     ```
 
-    Client side
+    Client side example
     ```lua
     local GetMoney = Riptide.Function(
         "GetMoney",
@@ -711,6 +712,7 @@ do
 
     --[=[
         Sets the callback of the remote function.
+
         ⚠️ Only callable on the server!
 
         @within Function
@@ -735,6 +737,7 @@ do
 
     --[=[
         Calls the remote function.
+
         ⚠️ Only callable on the client!
 
         @within Function
@@ -939,6 +942,7 @@ do
 
     --[=[
         Listens to data from the client.
+
         All data from the client is validated first.
 
         @within ServerEvent
@@ -1134,6 +1138,7 @@ end
 
 --[=[
     Starts Riptide, loading all of the singletons.
+    
     Returns the time it took to load everything.
 
     @within Riptide
