@@ -133,7 +133,8 @@ local SignalCache: { [string]: Signal.Signal<...any> } = {}
 
 --[=[
     Creates a new cached signal.
-    Cached signals utilize `red-blox/signal` under the hood. Their only difference is that they're cached - therefore you can give Signals names and get them from other places.
+
+    Cached signals utilize `red-blox/signal` under the hood. The only difference is that they're cached - each Signal has a name, and you can get each Signal from anywhere in your codebase.
 
     @within Riptide
     @param Name string
@@ -161,16 +162,18 @@ end
 --[=[
     Logger object, based around events.
 
-    Only Fatal level events are logged to the developer console, though you can set up functions to log any event type you want utiling `Logger:OnEvent()`:
+    It only logs Fatal events to the developer console, although you can easily set up functions to log any event type you want utilizing `Logger:OnEvent()`:
     ```lua
     local Logger = Riptide.Logger.new()
     Logger:OnEvent("Debug", function(Event)
-        print(`[🟡][{Event.Time}]: {Event.Message}`)
+        print(`[🟡][{🕒Event.Time}]: {Event.Message}`)
     end)
     ```
 
     Logger contains 5 event types: `Info`, `Debug`, `Warn`, `Error`, `Fatal`.
-    `Fatal` works the same as `error()` -- it halts execution.
+
+    `Fatal` uses an `error()` under the hood - it halts execution.
+    
 
     Events consist of the unix timestamp they happened at, their type and the message assigned to them.
 
@@ -1138,7 +1141,7 @@ end
 
 --[=[
     Starts Riptide, loading all of the singletons.
-    
+
     Returns the time it took to load everything.
 
     @within Riptide
