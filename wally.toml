@@ -3,6 +3,7 @@ name = "mark-marks/riptide"
 version = "1.0.0"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
+license = "MIT"
 
 exclude = ["**"]
 include = [
