@@ -3,12 +3,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-local Signal = require(ReplicatedStorage.Packages.Signal)
-local Future = require(ReplicatedStorage.Packages.Future)
-local Ratelimiter = require(ReplicatedStorage.Packages.Ratelimit)
-local Guard = require(ReplicatedStorage.Packages.Guard)
-local Spawn = require(ReplicatedStorage.Packages.Spawn)
-
+local Signal = require(ReplicatedStorage.Packages._Index["red-blox_signal@2.0.2"].signal)
+local Future = require(ReplicatedStorage.Packages._Index["red-blox_future@1.0.1"].future)
+local Ratelimiter = require(ReplicatedStorage.Packages._Index["red-blox_ratelimit@1.0.1"].ratelimit)
+local Guard = require(ReplicatedStorage.Packages._Index["red-blox_guard@1.0.1"].guard)
+local Spawn = require(ReplicatedStorage.Packages._Index["red-blox_spawn@1.0.0"].spawn)
 
 --[=[
     A minimal framework, designed with speed and ease of development in mind.

@@ -21,5 +21,5 @@ Riptide is made to have as little bloat as possible, exposing and using only wha
 Add Riptide to your `wally.toml`:
 ```toml
 [dependencies]
-Riptide = "mark-marks/riptide@1.0.0"
+Riptide = "mark-marks/riptide@1.0.2"
 ```
