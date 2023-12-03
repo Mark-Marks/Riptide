@@ -6,11 +6,11 @@ A single-script architecture framework, designed with speed, ease of development
 
 ### ⚡ Blazingly Fast
 
-Riptide was designed with speed in mind. It creates little to no overhead over using your own loader, and utilizes Red under the hood to achieve blazingly fast networking.
+Riptide was designed with speed in mind. It creates little to no overhead over using your own or other loaders, and utilizes Red under the hood to achieve blazingly fast networking.
 
 ### 🔐 Type Safe
 
-Riptide is fully strictly typed, giving You full intellisense and improving the speed of your development.
+Riptide is fully strictly typed, giving full intellisense and improving the speed of development.
 
 ### 📦 Bloatless
 
