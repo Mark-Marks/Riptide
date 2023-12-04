@@ -5,6 +5,6 @@ Riptide is installed via Wally.
 2. Add Riptide to your `wally.toml` file:
 ```toml
 [dependencies]
-Riptide = "mark-marks/riptide@1.0.2"
+Riptide = "mark-marks/riptide@1.2.0"
 ```
 3. Run `wally install`.
