@@ -74,7 +74,7 @@ Riptide.AnonymousSignal = Signal
 --- Reference to Riptide's default logger, which logs all `Debug` and `Info` events
 --- @prop Logger.Default Logger
 --- @within Riptide
-Riptide.Default = Logger.Default
+Riptide.DefaultLogger = Logger.Default
 
 --- Reference to `Logger`
 --- @prop Logger Logger
