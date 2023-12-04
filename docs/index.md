@@ -5,7 +5,10 @@ layout: home
 hero:
   name: "Riptide"
   text: "A blazingly fast framework"
-  tagline: Designed with development in mind.
+  tagline: Designed with developers in mind.
+  image:
+    src: /logo.png
+    alt: Riptide Logo
   actions:
     - theme: brand
       text: Get Started

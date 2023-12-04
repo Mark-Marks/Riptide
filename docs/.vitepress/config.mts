@@ -58,7 +58,12 @@ export default defineConfig({
 	title: "Riptide",
 	description: "A blazingly fast framework.",
 	base: "/Riptide/",
+	head: [
+		['link', { rel: 'icon', href: '/favicon.png' }]
+	],
+
 	themeConfig: {
+		logo: "/logo.png",
 		// https://vitepress.dev/reference/default-theme-config
 		nav: nav(),
 
