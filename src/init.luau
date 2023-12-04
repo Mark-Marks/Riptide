@@ -76,6 +76,106 @@ Riptide.AnonymousSignal = Signal
 --- @within Riptide
 Riptide.Default = Logger.Default
 
+--- Reference to `Logger`
+--- @prop Logger Logger
+--- @within Riptide
+Riptide.Logger = Logger.Logger
+
+---------------------------------------------------
+-- NETWORKING CONSTRUCTORS
+---------------------------------------------------
+
+-- Events
+
+--[=[
+    Blazingly fast & typesafe networking, utilizing Red under the hood.
+
+    ```lua
+    -- Server
+    local ValidateRole = Riptide.Guard.Or(Riptide.Guard.Literal("Murderer"), Riptide.Guard.Literal("Innocent"))
+    local AssignRole = Riptide.Event.Server("AssignRole", true, function(Role)
+        return ValidateRole(Role) -- Automatically types `Team` as `"Murderer" | "Innocent"`
+    end)
+
+    AssignRole:Fire(Murderer, "Murderer")
+    ```
+
+    ```lua
+    -- Client
+    local ValidateRole = Riptide.Guard.Or(Riptide.Guard.Literal("Murderer"), Riptide.Guard.Literal("Innocent"))
+    local AssignRole = Riptide.Event.Client("AssignRole", true, function(Role)
+        return ValidateRole(Role) -- Automatically types `Team` as `"Murderer" | "Innocent"`
+    end)
+
+    AssignRole:On(function(Role) -- `Role` is now `"Murder" | "Innocent"`
+        LocalPlayer.Role.Value = Role
+    end)
+    ```
+
+    @class Event
+]=]
+local Event = {}
+
+--[=[
+    Creates an event on the client.
+
+    @param Name string
+    @param Reliable boolean
+    @param Validate (...unknown) -> Args -- Purely for typechecking, doesn't actually do anything
+    @return ClientEvent
+]=]
+function Event.Client<T...>(Name: string, Reliable: boolean, Validate: (...unknown) -> T...): ClientEvent<T...>
+    if not Reliable then
+        Name ..= "U"
+    end
+
+    Logger.Default:FatalAssert(RunService:IsClient(), "[Riptide] Event.Client: Can only be accessed from the client.")
+    Logger.Default:FatalAssert(not Networking.Identifier.Exists(Name), "[Riptide] Event.Client: Cannot use the same name twice.")
+
+    local Id = Networking.Identifier.Shared(Name):Await()
+
+    return Networking.Event.Client.new(Id, Reliable, Validate) :: any
+end
+
+--[=[
+    Creates an event on the server.
+
+    @param Name string
+    @param Reliable boolean
+    @param Validate (...unknown) -> T... -- Sanity checks the data sent from the player & provides typechecking
+    @return ServerEvent
+]=]
+function Event.Server<T...>(Name: string, Reliable: boolean, Validate: (...unknown) -> T...): ServerEvent<T...>
+    if not Reliable then
+        Name ..= "U"
+    end
+
+    Logger.Default:FatalAssert(RunService:IsServer(), "[Riptide] Event.Server: Can only be accessed from the server.")
+    Logger.Default:FatalAssert(not Networking.Identifier.Exists(Name), "[Riptide] Event.Server: Cannot use the same name twice.")
+
+    local Id = Networking.Identifier.Shared(Name):Await()
+
+    return Networking.Event.Server.new(Id, Reliable, Validate)
+end
+
+--- Reference to `Event`
+--- @prop Event Event
+--- @within Riptide
+Riptide.Event = Event
+
+--[=[
+    Creates a remote function.
+
+    @within Riptide
+    @param Name string
+    @param ValidateArgs (...unknown) -> T...
+    @param ValidateReturn (...unknown) -> U...
+    @return Function
+]=]
+function Riptide.Function<T..., U...>(Name: string, ValidateArgs: (...unknown) -> T..., ValidateReturn: (...unknown) -> U...): Function<T..., U...>
+    return Networking.Function.new(Name, ValidateArgs, ValidateReturn)
+end
+
 ---------------------------------------------------
 -- FRAMEWORK
 ---------------------------------------------------
