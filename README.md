@@ -2,6 +2,10 @@
 
 A single-script architecture framework, designed with speed, ease of development and no bloat in mind.
 
+# ARCHIVED
+
+Riptide has been superseded by [sapphire](https://github.com/mark-marks/sapphire). If you for some reason want to maintain Riptide, you're open to create a fork.
+
 ## Features
 
 ### ⚡ Blazingly Fast
